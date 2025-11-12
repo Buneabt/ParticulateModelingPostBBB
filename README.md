@@ -23,6 +23,6 @@ Connecting GHG emissions to things such as particulate emissions, particularly P
 
 
 
-[1] J. M. Pearce and R. Parncutt, “Quantifying Global Greenhouse Gas Emissions in Human Deaths to Guide Energy Policy,” Energies, vol. 16, no. 16, p. 6074, Jan. 2023, doi: 10.3390/en16166074.
+[1] J. M. Pearce and R. Parncutt, “Quantifying Global Greenhouse Gas Emissions in Human Deaths to Guide Energy Policy,” Energies, vol. 16, no. 16, p. 6074, Jan. 2023, doi: 10.3390/en16166074. <br>
 [2] J. Heo, P. J. Adams, and H. O. Gao, “Public Health Costs of Primary PM2.5 and Inorganic PM2.5 Precursor Emissions in the United States,” Environ. Sci. Technol., vol. 50, no. 11, pp. 6061–6070, June 2016, doi: 10.1021/acs.est.5b06125.
 
