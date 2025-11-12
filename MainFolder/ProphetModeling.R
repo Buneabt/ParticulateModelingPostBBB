@@ -9,6 +9,7 @@ library(ggplot2)
 
 # === BASIC PROPHET MODEL SETUP ===
 df_full <- read.csv("data/finaldf.csv")
+df_policy <- read.csv("data/finaldf.csv")
 
 df_full$Carbon.dioxide <- as.numeric(gsub(",", "", as.character(df_full$Carbon.dioxide)))
 df_full$Methane <- as.numeric(gsub(",", "", as.character(df_full$Methane)))
@@ -29,7 +30,6 @@ df_long <- df_full1 %>%
   select(Year, Carbon.dioxide, Nitrous.oxide, Methane, Pm2.5) %>%
   pivot_longer(cols = -Year, names_to = "Component", values_to = "Normalized_Value")
 
-# Create the line plot
 emissions_plot <- ggplot(df_long, aes(x = Year, y = Normalized_Value, color = Component)) +
   geom_line(size = 1.2) +
   geom_point(size = 2, alpha = 0.7) +
@@ -85,18 +85,9 @@ projected_data <- df_full %>%
   filter(Year >= 2024 & Year <= 2035 & !is.na(Carbon.dioxide)) %>%
   select(Year, Carbon.dioxide)
 
-if (nrow(projected_data) > 0) {
-  future_years <- projected_data$Year
-  future_co2 <- projected_data$Carbon.dioxide
-} else {
-  recent_years <- tail(dfprophet$Year, 5)
-  recent_co2 <- tail(dfprophet$Carbon.dioxide, 5)
-  co2_trend <- lm(recent_co2 ~ recent_years)
-  co2_decline_rate <- coef(co2_trend)[2]
-  co2_intercept <- coef(co2_trend)[1]
-  future_years <- 2024:2035
-  future_co2 <- co2_intercept + co2_decline_rate * future_years
-}
+
+future_years <- projected_data$Year
+future_co2 <- projected_data$Carbon.dioxide
 
 m <- prophet(
   yearly.seasonality = FALSE,
@@ -141,8 +132,6 @@ baseline_forecast_table <- forecast_table
 baseline_forecast_table$Scenario <- "Pre-BBB Baseline"
 
 # === POST-BBB POLICY SCENARIO ===
-df_policy <- read.csv("data/finaldf.csv")
-
 df_policy$Carbon.dioxide <- as.numeric(gsub(",", "", as.character(df_policy$Carbon.dioxide)))
 df_policy$forecastedC02 <- as.numeric(gsub(",", "", as.character(df_policy$forecastedC02)))
 

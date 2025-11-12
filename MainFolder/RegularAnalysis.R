@@ -30,13 +30,10 @@ dfLong <- dfLong %>%
          )
 
 ggplot(dfLong, aes(x = pre_post, y = rate_change, color = pre_bbb)) +
-  # Single line before 2025 (only plot Pre since they're identical)
   geom_line(data = dfLong %>% filter(pre_post <= 2025, pre_bbb == "Rate Change (Pre)"), 
             size = 1) +
-  # Pre line from 2025 onwards (smoothed)
   geom_smooth(data = dfLong %>% filter(pre_post >= 2025, pre_bbb == "Rate Change (Pre)"), 
               se = FALSE, method = "loess", span = 0.75, size = 1) +
-  # Post line from 2025 onwards (regular line)
   geom_line(data = dfLong %>% filter(pre_post >= 2025, pre_bbb == "Rate Change (Post)"), 
             size = 1) +
   geom_vline(xintercept = 2025, linetype = "dotted", color = "black", size = 1) +
@@ -65,26 +62,22 @@ dfLongHealth <- dfHealth %>%
 
 dfLongHealth <- dfLongHealth %>%
   mutate(Deaths = as.numeric(Deaths),
-         Year = as.numeric(`Pre/Post`)  # Use a clearer name
+         Year = as.numeric(`Pre/Post`)  
   )
 
 
 
-# Get 2035 values for both Pre and Post BBB
 deaths_2035 <- dfLongHealth %>% filter(Year == 2035)
 pre_2035 <- deaths_2035 %>% filter(grepl("Pre-BBB", `Pre-BBB`)) %>% pull(Deaths)
 post_2035 <- deaths_2035 %>% filter(grepl("Post-BBB", `Pre-BBB`)) %>% pull(Deaths)
 diff_2035 <- pre_2035 - post_2035
 
-# Create data for shading the area between lines (2025-2035)
 shade_data <- dfLongHealth %>%
   filter(Year >= 2025, Year <= 2035) %>%
   select(Year, `Pre-BBB`, Deaths) %>%
   pivot_wider(names_from = `Pre-BBB`, values_from = Deaths)
 
-# Create the plot
 SecondGraph <- ggplot(dfLongHealth, aes(x = Year, y = Deaths, color = `Pre-BBB`)) +
-  # Add shaded ribbon between the two lines
   geom_ribbon(data = shade_data, 
               aes(x = Year, 
                   ymin = `Premature Deaths (USA) Post-BBB`, 
@@ -92,11 +85,9 @@ SecondGraph <- ggplot(dfLongHealth, aes(x = Year, y = Deaths, color = `Pre-BBB`)
               fill = "coral", alpha = 0.3, inherit.aes = FALSE) +
   geom_smooth(se = FALSE, method = "gam") +
   geom_vline(xintercept = 2025, linetype = "dotted", color = "black", size = 1) +
-  # Add range marker for 2035
   annotate("segment", x = 2035, xend = 2035, y = post_2035 - 5000, yend = pre_2035,
            arrow = arrow(ends = "both", length = unit(0.2, "cm")),
            color = "black", size = 0.8) +
-  # Add label for the TOTAL difference (150K total over 10 years)
   annotate("text", x = 2031, y = 260*10^3,
            label = "~150K Increase In \nPreventable Deaths (2025-2035)",
            hjust = 0, size = 3.5, fontface = "bold") +
