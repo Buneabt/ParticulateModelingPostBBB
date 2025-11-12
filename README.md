@@ -16,7 +16,7 @@ Connecting GHG emissions to things such as particulate emissions, particularly P
 3. Prophet [This model developed by meta worked quite nicely as it is developed for time series data]
 
 
-[Image of Prophet Model]()
+![Image of Prophet Model](MainFolder/data/bbb_policy_impact.png)
 
 
 
