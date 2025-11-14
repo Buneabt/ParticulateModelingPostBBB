@@ -12,22 +12,19 @@ df_full <- read.csv("data/finaldf.csv")
 df_policy <- read.csv("data/finaldf.csv")
 
 df_full$Carbon.dioxide <- as.numeric(gsub(",", "", as.character(df_full$Carbon.dioxide)))
-df_full$Methane <- as.numeric(gsub(",", "", as.character(df_full$Methane)))
-df_full$Nitrous.oxide <- as.numeric(gsub(",", "", as.character(df_full$Nitrous.oxide)))
-df_full$Others <- as.numeric(gsub(",", "", as.character(df_full$Others)))
+
 
 df_full1 <- df_full %>% 
   filter(Year <= 2022) %>% 
   mutate(
     Carbon.dioxide = Carbon.dioxide/sum(Carbon.dioxide),
-    Nitrous.oxide = Nitrous.oxide/sum(Nitrous.oxide),
-    Methane = Methane/sum(Methane),
     Pm2.5 = Pm2.5/sum(Pm2.5)
-  ) 
+  ) %>% 
+  select (Year, Carbon.dioxide, Pm2.5)
 
 
 df_long <- df_full1 %>%
-  select(Year, Carbon.dioxide, Nitrous.oxide, Methane, Pm2.5) %>%
+  select(Year, Carbon.dioxide, Pm2.5) %>%
   pivot_longer(cols = -Year, names_to = "Component", values_to = "Normalized_Value")
 
 emissions_plot <- ggplot(df_long, aes(x = Year, y = Normalized_Value, color = Component)) +
@@ -44,14 +41,10 @@ emissions_plot <- ggplot(df_long, aes(x = Year, y = Normalized_Value, color = Co
   scale_color_manual(
     values = c(
       "Carbon.dioxide" = "darkred",
-      "Nitrous.oxide" = "orange", 
-      "Methane" = "darkblue",
       "Pm2.5" = "darkgreen"
     ),
     labels = c(
       "Carbon.dioxide" = "Carbon Dioxide",
-      "Nitrous.oxide" = "Nitrous Oxide",
-      "Methane" = "Methane", 
       "Pm2.5" = "PM2.5"
     )
   ) +
@@ -65,6 +58,9 @@ emissions_plot <- ggplot(df_long, aes(x = Year, y = Normalized_Value, color = Co
   guides(color = guide_legend(ncol = 3))
 
 print(emissions_plot)
+
+ggsave("data/emissions.png", emissions_plot, 
+       width = 12, height = 10, dpi = 300)
 
 
 dfprophet <- df_full %>%
