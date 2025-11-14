@@ -80,11 +80,16 @@ p <- ggplot() +
     panel.grid.minor = element_line(color = "gray95", size = 0.3),
     plot.margin = margin(20, 20, 20, 20)
   ) +
+  geom_hline(yintercept = 3064, linetype = "dashed", color = "gray20", alpha = 0.7) +
   geom_vline(xintercept = 2025, linetype = "dashed", color = "gray50", alpha = 0.7) +
   annotate("text", x = 2025.5, y = 5800, 
            label = "Policy\nDivergence", 
            hjust = 0, size = 3.5, color = "gray40",
-           fontface = "italic")
+           fontface = "italic") + 
+  annotate("text", x = 2015, y = 3200, 
+           label = "United States Climate Goal", 
+           hjust = 0, size = 3.5, color = "gray20",
+           fontface = "italic") 
 
 print(p)
 
