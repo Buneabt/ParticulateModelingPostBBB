@@ -1,119 +1,96 @@
-library(janitor)
-library(here)
-library(dplyr)
 library(ggplot2)
-library(readr)
+library(dplyr)
 library(tidyr)
+library(readr)
+library(scales)
+
+# Read and process the data (assuming your original data processing works)
+df <- read_csv("data/EMSE 6220 - Sheet1.csv", skip = 5)
+df <- df[c(2, 8), 3:33] 
+df_pre <- df[1, 1:31]
+df_tobind <- df_pre[,20]
+df_pre <- pivot_longer(df_pre, cols = 1:31, names_to = 'years', values_to = 'C02')
+df_post <- cbind(df_tobind, df[2, 21:31])
+df_post <- pivot_longer(df_post, cols = 1:12, names_to = 'years', values_to = 'C02')
+
+# Clean the data
+df_pre <- df_pre %>% 
+  mutate(C02 = gsub(",", "", C02)) %>% 
+  mutate(years = as.numeric(years),
+         C02 = as.numeric(C02)) %>%
+  filter(!is.na(C02), !is.na(years))
+
+df_post <- df_post %>% 
+  mutate(C02 = gsub(",", "", C02)) %>% 
+  mutate(years = as.numeric(years),
+         C02 = as.numeric(C02)) %>%
+  filter(!is.na(C02), !is.na(years))
+
+# Add scenario labels
+df_pre$scenario <- "Pre-BBB"
+df_post$scenario <- "Big Beautiful Bill"
+
+df_combined <- rbind(df_pre, df_post)
 
 
-df <- read_csv("data/EMSE 6220 - Sheet1.csv", 
-                             skip = 5)
-df <- df[c(10,16),2:28] 
-df <- df[,-2]
+ribbon_years <- seq(2024, 2035, by = 1)
+ribbon_data <- data.frame(
+  years = ribbon_years,
+  pre_bbb = approx(df_pre$years, df_pre$C02, xout = ribbon_years)$y,
+  bbb = approx(df_post$years, df_post$C02, xout = ribbon_years)$y
+)
 
-dfLong <- df %>% 
-        pivot_longer(cols = starts_with("20"),
-                     names_to = "Pre/Post",
-                     values_to = "Rate Change")
+ribbon_data <- ribbon_data[complete.cases(ribbon_data), ]
 
-dfPre <- dfLong[1:25,]
-dfPost <- dfLong[26:50,]
-
-
-dfLong <- clean_names(dfLong) 
-
-    
-
-dfLong <- dfLong %>%
-  mutate(rate_change = as.numeric(gsub("%", "", rate_change)),
-         pre_post = as.numeric(pre_post)
-         )
-
-ggplot(dfLong, aes(x = pre_post, y = rate_change, color = pre_bbb)) +
-  geom_line(data = dfLong %>% filter(pre_post <= 2025, pre_bbb == "Rate Change (Pre)"), 
-            size = 1) +
-  geom_smooth(data = dfLong %>% filter(pre_post >= 2025, pre_bbb == "Rate Change (Pre)"), 
-              se = FALSE, method = "loess", span = 0.75, size = 1) +
-  geom_line(data = dfLong %>% filter(pre_post >= 2025, pre_bbb == "Rate Change (Post)"), 
-            size = 1) +
-  geom_vline(xintercept = 2025, linetype = "dotted", color = "black", size = 1) +
-  geom_hline(yintercept = 0, size = 1) +
-  labs(
-    title = "Rate Change Comparison: Pre vs Post Big Beautiful Bill",
-    x = "Year",
-    y = "Rate Change (%)",
-    color = "Period"
+p <- ggplot() +
+  geom_ribbon(data = ribbon_data, 
+              aes(x = years, ymin = pre_bbb, ymax = bbb),
+              fill = "#FF6B6B", alpha = 0.3,
+              color = NA) +
+  geom_line(data = df_pre, 
+            aes(x = years, y = C02, color = "Pre-BBB"),
+            size = 1.2, alpha = 0.9) +
+  geom_line(data = df_post, 
+            aes(x = years, y = C02, color = "Big Beautiful Bill"),
+            size = 1.2, alpha = 0.9) +
+  scale_color_manual(values = c("Pre-BBB" = "#2E8B57", 
+                                "Big Beautiful Bill" = "#DC143C"),
+                     name = "Scenario") +
+  scale_x_continuous(breaks = seq(2005, 2035, 5),
+                     minor_breaks = seq(2005, 2035, 1)) +
+  scale_y_continuous(labels = comma_format(),
+                     breaks = seq(3000, 6500, 500)) +
+  labs(title = "U.S. CO2 Emissions Projections: Pre-BBB vs Big Beautiful Bill",
+       subtitle = "Projected divergence in emissions trajectories from 2025-2035",
+       x = "Year",
+       y = "CO2 Emissions (Million Metric Tons)",
+       caption = "Sources: NIH, Princeton REPEAT Project") +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5, margin = margin(b = 10)),
+    plot.subtitle = element_text(size = 12, hjust = 0.5, color = "gray40", margin = margin(b = 20)),
+    plot.caption = element_text(size = 9, color = "gray50", hjust = 0),
+    legend.position = "bottom",
+    legend.title = element_text(size = 11, face = "bold"),
+    legend.text = element_text(size = 10),
+    axis.title.x = element_text(size = 12, face = "bold", margin = margin(t = 10)),
+    axis.title.y = element_text(size = 12, face = "bold", margin = margin(r = 10)),
+    axis.text = element_text(size = 10),
+    panel.grid.major = element_line(color = "gray90", size = 0.5),
+    panel.grid.minor = element_line(color = "gray95", size = 0.3),
+    plot.margin = margin(20, 20, 20, 20)
   ) +
-  theme_bw() +
-  annotate("text", x = 2025, y = max(dfLong$rate_change, na.rm = TRUE), 
-           label = "BBB Passage (2025)", hjust = -0.1, size = 3.5)
+  geom_vline(xintercept = 2025, linetype = "dashed", color = "gray50", alpha = 0.7) +
+  annotate("text", x = 2025.5, y = 5800, 
+           label = "Policy\nDivergence", 
+           hjust = 0, size = 3.5, color = "gray40",
+           fontface = "italic")
 
+print(p)
 
-dfHealth <- read_csv("EMSE 6220 - Sheet1.csv", skip = 5)
-dfHealth <- dfHealth[c(11,17), 2:28] 
-dfHealth <- dfHealth[, -2]
-dfHealth[1,1] <- "Premature Deaths (USA) Pre-BBB"
-dfHealth[2,1] <- "Premature Deaths (USA) Post-BBB"
-
-dfLongHealth <- dfHealth %>% 
-  pivot_longer(cols = starts_with("20"),
-               names_to = "Pre/Post",
-               values_to = "Deaths")
-
-dfLongHealth <- dfLongHealth %>%
-  mutate(Deaths = as.numeric(Deaths),
-         Year = as.numeric(`Pre/Post`)  
-  )
-
-
-
-deaths_2035 <- dfLongHealth %>% filter(Year == 2035)
-pre_2035 <- deaths_2035 %>% filter(grepl("Pre-BBB", `Pre-BBB`)) %>% pull(Deaths)
-post_2035 <- deaths_2035 %>% filter(grepl("Post-BBB", `Pre-BBB`)) %>% pull(Deaths)
-diff_2035 <- pre_2035 - post_2035
-
-shade_data <- dfLongHealth %>%
-  filter(Year >= 2025, Year <= 2035) %>%
-  select(Year, `Pre-BBB`, Deaths) %>%
-  pivot_wider(names_from = `Pre-BBB`, values_from = Deaths)
-
-SecondGraph <- ggplot(dfLongHealth, aes(x = Year, y = Deaths, color = `Pre-BBB`)) +
-  geom_ribbon(data = shade_data, 
-              aes(x = Year, 
-                  ymin = `Premature Deaths (USA) Post-BBB`, 
-                  ymax = `Premature Deaths (USA) Pre-BBB`),
-              fill = "coral", alpha = 0.3, inherit.aes = FALSE) +
-  geom_smooth(se = FALSE, method = "gam") +
-  geom_vline(xintercept = 2025, linetype = "dotted", color = "black", size = 1) +
-  annotate("segment", x = 2035, xend = 2035, y = post_2035 - 5000, yend = pre_2035,
-           arrow = arrow(ends = "both", length = unit(0.2, "cm")),
-           color = "black", size = 0.8) +
-  annotate("text", x = 2031, y = 260*10^3,
-           label = "~150K Increase In \nPreventable Deaths (2025-2035)",
-           hjust = 0, size = 3.5, fontface = "bold") +
-  scale_x_continuous(
-    breaks = seq(2010, 2035, 10),
-    expand = expansion(add = c(1,10))
-  ) +
-  labs(
-    title = "Premature Deaths in the US Comparison: Pre vs Post Big Beautiful Bill",
-    x = "Year",
-    y = "Number of Premature Deaths",
-    color = "Period"
-  ) +
-  theme_bw() +
-  theme(plot.title = element_text(hjust = 0.5, size = 12, face = "bold"),
-        legend.position = 'none') +
-  annotate("text", x = 2025, y = max(dfLongHealth$Deaths, na.rm = TRUE), 
-           label = "BBB Passage (2025)", hjust = -0.1, size = 3.5) +
-  geom_text(data = data.frame(x = 2039, y = 218875.3, label = "Post-Big Beautiful Bill"),
-            mapping = aes(x = x, y = y, label = label),
-            size = 3.88, colour = "red", family = "", inherit.aes = FALSE) +
-  geom_text(data = data.frame(x = 2039, y = 193500, label = "Pre-Big Beautiful Bill"),
-            mapping = aes(x = x, y = y, label = label),
-            size = 3.88, colour = "steelblue", family = "", inherit.aes = FALSE) 
-
-
-SecondGraph
-
-
+# Save the plot
+ggsave("data/co2_emissions_comparison.png", 
+       plot = p, 
+       width = 12, height = 8, 
+       dpi = 300, 
+       bg = "white")
