@@ -99,3 +99,79 @@ ggsave("data/co2_emissions_comparison.png",
        width = 12, height = 8, 
        dpi = 300, 
        bg = "white")
+
+
+
+
+
+df1 <- read_csv("data/EMSE 6220 - Sheet1.csv", skip = 5)
+
+df1 <- df1[c(6, 12), 3:33] 
+df_pre_part <- df1[1,]
+df_tobind1 <- df_pre_part[,20]
+df_pre_part <- pivot_longer(df_pre_part, cols = 1:31, names_to = 'years', values_to = 'Particulates')
+df_post_part <- cbind(df_tobind1, df1[2, 21:31])
+df_post_part <- pivot_longer(df_post_part, cols = 1:12, names_to = 'years', values_to = 'Particulates')
+
+df_pre_part <- df_pre_part %>% 
+  mutate(years = as.numeric(years),
+         Particulates = as.numeric(Particulates))
+
+df_post_part <- df_post_part %>% 
+  mutate(years = as.numeric(years),
+         Particulates = as.numeric(Particulates))
+
+
+p2 <- ggplot() +
+#  geom_ribbon(data = ribbon_data, 
+#              aes(x = years, ymin = pre_bbb, ymax = bbb),
+#              fill = "#FF6B6B", alpha = 0.3,
+#              color = NA) +
+  geom_line(data = df_pre_part, 
+            aes(x = years, y = Particulates, color = "Pre-BBB"),
+            size = 1.2, alpha = 0.9) +
+  geom_line(data = df_post_part, 
+            aes(x = years, y = Particulates, color = "Big Beautiful Bill"),
+            size = 1.2, alpha = 0.9) +
+  scale_color_manual(values = c("Pre-BBB" = "#2E8B57", 
+                                "Big Beautiful Bill" = "#DC143C"),
+                     name = "Scenario") +
+  scale_x_continuous(breaks = seq(2005, 2035, 5),
+                     minor_breaks = seq(2005, 2035, 1)) +
+  scale_y_continuous(breaks = seq(0, 4, 8)) +
+  labs(title = "U.S. Particulate Emissions Projections: Pre-BBB vs Big Beautiful Bill",
+       subtitle = "Projected divergence in emissions trajectories from 2025-2035",
+       x = "Year",
+       y = "Particulate Emissions",
+       caption = "Sources: NIH, Princeton REPEAT Project") +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5, margin = margin(b = 10)),
+    plot.subtitle = element_text(size = 12, hjust = 0.5, color = "gray40", margin = margin(b = 20)),
+    plot.caption = element_text(size = 9, color = "gray50", hjust = 0),
+    legend.position = "bottom",
+    legend.title = element_text(size = 11, face = "bold"),
+    legend.text = element_text(size = 10),
+    axis.title.x = element_text(size = 12, face = "bold", margin = margin(t = 10)),
+    axis.title.y = element_text(size = 12, face = "bold", margin = margin(r = 10)),
+    axis.text = element_text(size = 10),
+    panel.grid.major = element_line(color = "gray90", size = 0.5),
+    panel.grid.minor = element_line(color = "gray95", size = 0.3),
+    plot.margin = margin(20, 20, 20, 20)
+  ) +
+  geom_vline(xintercept = 2025, linetype = "dashed", color = "gray50", alpha = 0.7) +
+  annotate("text", x = 2025.5, y = 10, 
+           label = "Policy\nDivergence", 
+           hjust = 0, size = 3.5, color = "gray40",
+           fontface = "italic")
+
+
+print(p2)
+
+
+
+
+
+
+
+

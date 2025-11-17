@@ -18,9 +18,10 @@ df_full1 <- df_full %>%
   filter(Year <= 2022) %>% 
   mutate(
     Carbon.dioxide = Carbon.dioxide/sum(Carbon.dioxide),
+    Nitrous.oxide = Nitrous.oxide/sum(Nitrous.oxide),
     Pm2.5 = Pm2.5/sum(Pm2.5)
   ) %>% 
-  select (Year, Carbon.dioxide, Pm2.5)
+  select (Year, Carbon.dioxide, Pm2.5, Nitrous.oxide)
 
 
 df_long <- df_full1 %>%
@@ -41,10 +42,12 @@ emissions_plot <- ggplot(df_long, aes(x = Year, y = Normalized_Value, color = Co
   scale_color_manual(
     values = c(
       "Carbon.dioxide" = "darkred",
+      #"Nitrous.oxide" = "darkblue",
       "Pm2.5" = "darkgreen"
     ),
     labels = c(
       "Carbon.dioxide" = "Carbon Dioxide",
+      #"Nitrous.oxide" = "Nitrous Oxide", 
       "Pm2.5" = "PM2.5"
     )
   ) +
