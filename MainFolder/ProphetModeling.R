@@ -25,7 +25,7 @@ df_full1 <- df_full %>%
 
 
 df_long <- df_full1 %>%
-  select(Year, Carbon.dioxide, Pm2.5) %>%
+  select(Year, Carbon.dioxide, Pm2.5, Nitrous.oxide) %>%
   pivot_longer(cols = -Year, names_to = "Component", values_to = "Normalized_Value")
 
 emissions_plot <- ggplot(df_long, aes(x = Year, y = Normalized_Value, color = Component)) +
@@ -42,12 +42,12 @@ emissions_plot <- ggplot(df_long, aes(x = Year, y = Normalized_Value, color = Co
   scale_color_manual(
     values = c(
       "Carbon.dioxide" = "darkred",
-      #"Nitrous.oxide" = "darkblue",
+      "Nitrous.oxide" = "darkblue",
       "Pm2.5" = "darkgreen"
     ),
     labels = c(
       "Carbon.dioxide" = "Carbon Dioxide",
-      #"Nitrous.oxide" = "Nitrous Oxide", 
+      "Nitrous.oxide" = "Nitrous Oxide", 
       "Pm2.5" = "PM2.5"
     )
   ) +
@@ -66,28 +66,34 @@ ggsave("data/emissions.png", emissions_plot,
        width = 12, height = 10, dpi = 300)
 
 
+# === UPDATED PROPHET MODEL WITH DUAL PREDICTORS ===
 dfprophet <- df_full %>%
-  filter(!is.na(Pm2.5) & !is.na(Carbon.dioxide) & 
-           is.finite(Pm2.5) & is.finite(Carbon.dioxide)) %>%
-  select(Carbon.dioxide, Pm2.5, Year)
+  filter(!is.na(Pm2.5) & !is.na(Carbon.dioxide) & !is.na(Nitrous.oxide) &
+           is.finite(Pm2.5) & is.finite(Carbon.dioxide) & is.finite(Nitrous.oxide)) %>%
+  select(Carbon.dioxide, Pm2.5, Year, Nitrous.oxide)
 
 prophet_data <- data.frame(
   ds = as.Date(paste0(dfprophet$Year, "-01-01")),
   y = dfprophet$Pm2.5,
-  carbon_dioxide = dfprophet$Carbon.dioxide
+  carbon_dioxide = dfprophet$Carbon.dioxide,
+  nitrous_oxide = dfprophet$Nitrous.oxide
 )
 
 prophet_data <- prophet_data[complete.cases(prophet_data), ]
-prophet_data <- prophet_data[is.finite(prophet_data$y) & is.finite(prophet_data$carbon_dioxide), ]
+prophet_data <- prophet_data[is.finite(prophet_data$y) & 
+                               is.finite(prophet_data$carbon_dioxide) & 
+                               is.finite(prophet_data$nitrous_oxide), ]
 
 projected_data <- df_full %>%
-  filter(Year >= 2024 & Year <= 2035 & !is.na(Carbon.dioxide)) %>%
-  select(Year, Carbon.dioxide)
-
+  filter(Year >= 2024 & Year <= 2035 & 
+           !is.na(Carbon.dioxide) & !is.na(Nitrous.oxide)) %>%
+  select(Year, Carbon.dioxide, Nitrous.oxide)
 
 future_years <- projected_data$Year
 future_co2 <- projected_data$Carbon.dioxide
+future_n2o <- projected_data$Nitrous.oxide
 
+# Create Prophet model with both regressors
 m <- prophet(
   yearly.seasonality = FALSE,
   weekly.seasonality = FALSE,
@@ -95,16 +101,19 @@ m <- prophet(
   changepoint.prior.scale = 0.1
 )
 
+# Add both regressors
 m <- add_regressor(m, 'carbon_dioxide', prior.scale = 0.5, mode = 'additive')
+m <- add_regressor(m, 'nitrous_oxide', prior.scale = 0.5, mode = 'additive')
 m <- fit.prophet(m, prophet_data)
 
 future <- data.frame(
   ds = as.Date(paste0(future_years, "-01-01")),
-  carbon_dioxide = future_co2
+  carbon_dioxide = future_co2,
+  nitrous_oxide = future_n2o
 )
 
 future_combined <- rbind(
-  prophet_data[, c("ds", "carbon_dioxide")],
+  prophet_data[, c("ds", "carbon_dioxide", "nitrous_oxide")],
   future
 )
 
@@ -134,28 +143,43 @@ baseline_forecast_table$Scenario <- "Pre-BBB Baseline"
 df_policy$Carbon.dioxide <- as.numeric(gsub(",", "", as.character(df_policy$Carbon.dioxide)))
 df_policy$forecastedC02 <- as.numeric(gsub(",", "", as.character(df_policy$forecastedC02)))
 
+# Check if there's a forecasted nitrous oxide column in your data
+# If not, we'll need to create projections or use current values
+if("forecastedN2O" %in% colnames(df_policy)) {
+  df_policy$forecastedN2O <- as.numeric(gsub(",", "", as.character(df_policy$forecastedN2O)))
+} else {
+  # If no forecasted N2O data, use current values or create simple projections
+  cat("Warning: No forecasted nitrous oxide data found. Using current values for policy scenario.\n")
+  df_policy$forecastedN2O <- df_policy$Nitrous.oxide
+}
+
 co2_comparison <- df_policy %>%
   filter(Year >= 2024) %>%
-  select(Year, Carbon.dioxide, forecastedC02) %>%
+  select(Year, Carbon.dioxide, forecastedC02, Nitrous.oxide, forecastedN2O) %>%
   mutate(
     CO2_Difference = forecastedC02 - Carbon.dioxide,
-    Percent_Reduction = ((Carbon.dioxide - forecastedC02) / Carbon.dioxide) * 100
+    N2O_Difference = forecastedN2O - Nitrous.oxide,
+    CO2_Percent_Reduction = ((Carbon.dioxide - forecastedC02) / Carbon.dioxide) * 100,
+    N2O_Percent_Reduction = ((Nitrous.oxide - forecastedN2O) / Nitrous.oxide) * 100
   )
 
-policy_co2_data <- df_policy %>%
-  filter(Year >= 2024 & Year <= 2035 & !is.na(forecastedC02)) %>%
-  select(Year, forecastedC02)
+policy_data <- df_policy %>%
+  filter(Year >= 2024 & Year <= 2035 & 
+           !is.na(forecastedC02) & !is.na(forecastedN2O)) %>%
+  select(Year, forecastedC02, forecastedN2O)
 
-policy_future_years <- policy_co2_data$Year
-policy_future_co2 <- policy_co2_data$forecastedC02
+policy_future_years <- policy_data$Year
+policy_future_co2 <- policy_data$forecastedC02
+policy_future_n2o <- policy_data$forecastedN2O
 
 policy_future <- data.frame(
   ds = as.Date(paste0(policy_future_years, "-01-01")),
-  carbon_dioxide = policy_future_co2
+  carbon_dioxide = policy_future_co2,
+  nitrous_oxide = policy_future_n2o
 )
 
 policy_future_combined <- rbind(
-  prophet_data[, c("ds", "carbon_dioxide")],
+  prophet_data[, c("ds", "carbon_dioxide", "nitrous_oxide")],
   policy_future
 )
 
@@ -186,7 +210,11 @@ policy_impacts <- data.frame(
                       baseline_forecast_table$PM25_Forecast) * 100
 )
 
+print("=== POLICY IMPACT ANALYSIS ===")
 print(policy_impacts)
+
+print("=== CO2 AND N2O COMPARISON ===")
+print(co2_comparison)
 
 total_sum_gap <- sum(policy_impacts$PM25_Impact)
 
@@ -231,14 +259,14 @@ bbb_comparison_plot <- ggplot(plot_data, aes(x = Year, y = PM25, color = Scenari
   geom_vline(xintercept = as.Date("2025-01-01"), linetype = "dotted", 
              color = "red", size = 1, alpha = 0.7) +
   labs(
-    title = "Big Beautiful Bill Impact on PM2.5 Air Quality",
-    subtitle = paste("Post-BBB increases PM2.5 by", 
+    title = "Big Beautiful Bill Impact on PM2.5 Air Quality (CO2 + N2O Model)",
+    subtitle = paste("Post-BBB changes PM2.5 by", 
                      round(total_sum_gap, 3), "μg/m³ between 2025 and 2035"),
     x = "Year",
     y = "PM2.5 (μg/m³)",
     color = "Scenario",
     fill = "Scenario",
-    caption = "Black dots: Historical data (2000-2022) | Red line: BBB policy divergence (2025)"
+    caption = "Black dots: Historical data (2000-2022) | Red line: BBB policy divergence (2025) | Model uses CO2 and N2O predictors"
   ) +
   scale_color_manual(values = c("Pre-BBB Baseline" = "blue", 
                                 "Post-BBB" = "darkgreen", 
@@ -253,13 +281,11 @@ bbb_comparison_plot <- ggplot(plot_data, aes(x = Year, y = PM25, color = Scenari
 
 print(bbb_comparison_plot)
 
-ggsave("data/bbb_policy_impact.png", bbb_comparison_plot, 
+ggsave("data/bbb_policy_impact_dual_predictors.png", bbb_comparison_plot, 
        width = 12, height = 8, dpi = 300)
 
-
-
 # === MODEL VALIDATION ===
-cat("\n=== PROPHET MODEL VALIDATION ===\n")
+cat("\n=== PROPHET MODEL VALIDATION (CO2 + N2O PREDICTORS) ===\n")
 
 # 1. Basic Performance Metrics
 cat("Model Performance Metrics:\n")
@@ -283,8 +309,33 @@ cv_performance <- performance_metrics(cv_results)
 cat("Cross-validation Performance:\n")
 print(cv_performance)
 
-# 4. Residual Plots for Validation
+# 4. Regressor Importance Analysis
+cat("\n=== REGRESSOR ANALYSIS ===\n")
+co2_range <- max(prophet_data$carbon_dioxide) - min(prophet_data$carbon_dioxide)
+n2o_range <- max(prophet_data$nitrous_oxide) - min(prophet_data$nitrous_oxide)
 
+cat(sprintf("CO2 Regressor Analysis:\n"))
+cat(sprintf("  Historical CO2 range: %.1f units\n", co2_range))
+cat(sprintf("  CO2 standardization μ: %.3f, σ: %.3f\n", 
+            m$extra_regressors$carbon_dioxide$mu, 
+            m$extra_regressors$carbon_dioxide$std))
+
+cat(sprintf("\nN2O Regressor Analysis:\n"))
+cat(sprintf("  Historical N2O range: %.1f units\n", n2o_range))
+cat(sprintf("  N2O standardization μ: %.3f, σ: %.3f\n", 
+            m$extra_regressors$nitrous_oxide$mu, 
+            m$extra_regressors$nitrous_oxide$std))
+
+# 5. Component Analysis
+components <- predict(m, future_combined)
+trend_change <- tail(components$trend, 1) - components$trend[1]
+cat(sprintf("\nModel Components:\n"))
+cat(sprintf("Overall trend change: %.3f μg/m³ from %d to %d\n", 
+            trend_change, 
+            as.numeric(format(min(prophet_data$ds), "%Y")), 
+            as.numeric(format(max(future_combined$ds), "%Y"))))
+
+# 6. Residual Plots for Validation
 validation_plots <- grid.arrange(
   # Residuals vs Fitted
   ggplot(data.frame(fitted = historical$yhat, residuals = residuals), 
@@ -323,7 +374,7 @@ validation_plots <- grid.arrange(
 
 print(validation_plots)
 
-# 5. Normality Tests
+# 7. Normality and Autocorrelation Tests
 cat("\nNormality Tests:\n")
 shapiro_test <- shapiro.test(residuals)
 cat(sprintf("Shapiro-Wilk test p-value: %.4f\n", shapiro_test$p.value))
@@ -333,7 +384,6 @@ if (shapiro_test$p.value > 0.05) {
   cat("⚠ Residuals may not be normally distributed (p < 0.05)\n")
 }
 
-# 6. Autocorrelation Test
 cat("\nAutocorrelation Analysis:\n")
 acf_result <- acf(residuals, plot = FALSE)
 ljung_box <- Box.test(residuals, lag = 10, type = "Ljung-Box")
@@ -344,38 +394,19 @@ if (ljung_box$p.value > 0.05) {
   cat("⚠ Potential autocorrelation in residuals (p < 0.05)\n")
 }
 
-# 7. Model Components Analysis
-cat("\nModel Components:\n")
-components <- predict(m, future_combined)
-trend_change <- tail(components$trend, 1) - components$trend[1]
-cat(sprintf("Overall trend change: %.3f μg/m³ from %d to %d\n", 
-            trend_change, 
-            as.numeric(format(min(prophet_data$ds), "%Y")), 
-            as.numeric(format(max(future_combined$ds), "%Y"))))
-
-# 8. CO2 Regressor Impact Assessment
-co2_range <- max(prophet_data$carbon_dioxide) - min(prophet_data$carbon_dioxide)
-cat(sprintf("\nCO2 Regressor Analysis:\n"))
-cat(sprintf("Historical CO2 range: %.1f units\n", co2_range))
-cat(sprintf("CO2 standardization μ: %.1f, σ: %.1f\n", 
-            m$extra_regressors$carbon_dioxide$mu, 
-            m$extra_regressors$carbon_dioxide$std))
-
-# 9. Validation Summary
-cat("\n=== VALIDATION SUMMARY ===\n")
+# 8. Validation Summary
+cat("\n=== VALIDATION SUMMARY (DUAL PREDICTOR MODEL) ===\n")
 cat("Model Quality Assessment:\n")
 if (r2 > 0.95) cat("✓ Excellent model fit (R² > 95%)\n") else if (r2 > 0.90) cat("✓ Good model fit (R² > 90%)\n") else cat("⚠ Moderate model fit\n")
 if (rmse < 0.5) cat("✓ Low prediction error (RMSE < 0.5)\n") else cat("⚠ Moderate prediction error\n")
 if (mean(cv_performance$rmse) < rmse * 1.2) cat("✓ Stable cross-validation performance\n") else cat("⚠ Potential overfitting detected\n")
 
-cat(sprintf("\nRecommendation: Model is suitable for BBB policy analysis\n"))
+cat(sprintf("\nRecommendation: Dual predictor model is suitable for BBB policy analysis\n"))
 cat(sprintf("Confidence in forecasts: %s\n", ifelse(r2 > 0.95 & rmse < 0.5, "High", "Moderate")))
+cat(sprintf("Regressor count: 2 (CO2 + N2O)\n"))
 
 # Save validation plots
-ggsave("data/model_validation_diagnostics.png", validation_plots, 
+ggsave("data/model_validation_dual_predictors.png", validation_plots, 
        width = 12, height = 10, dpi = 300)
 
-cat("\nValidation plots saved to: data/model_validation_diagnostics.png\n")
-
-
-
+cat("\nValidation plots saved to: data/model_validation_dual_predictors.png\n")
